@@ -47,7 +47,7 @@ async function bootstrap() {
   📍 Server running on:     ${url}
   📚 API Documentation:     ${url}/${apiPrefix}/docs
   🔧 Environment:           ${configService.get('NODE_ENV')}
-  🗄️  Database:             ${configService.get('DATABASE_URL') ? '✅ Connected' : '❌ Not configured'}
+  🗄️ Database:             ${configService.get('DATABASE_URL') ? '✅ Connected' : '❌ Not configured'}
   
   ⏰ Started at:            ${new Date().toLocaleString()}
   

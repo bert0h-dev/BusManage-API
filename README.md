@@ -113,6 +113,37 @@ curl http://localhost:3000/api/health
 
 ---
 
+## 🎯 Tecnologías y Librerías
+
+### Core
+
+- NestJS 11.x
+- Prisma 7.x
+- PostgreSQL 17
+- TypeScript 5.x
+
+### Autenticación
+
+- Passport.js
+- JWT
+- bcrypt
+
+### Validación
+
+- class-validator
+- class-transformer
+
+### Documentación
+
+- Swagger/OpenAPI
+
+### DevOps
+
+- Docker
+- Docker Compose
+
+---
+
 ## 📊 Módulos y Responsabilidades
 
 | Módulo   | Responsabilidad                   |
@@ -128,6 +159,14 @@ curl http://localhost:3000/api/health
 - ✅ Password hashing (bcrypt)
 - ✅ Auth guards para proteger rutas
 - ✅ Role-based access control
+
+---
+
+## 📈 Performance
+
+- ✅ Database connection pooling
+- ✅ Query optimization con Prisma
+- ✅ Compresión de respuestas
 
 ---
 
