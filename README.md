@@ -1,98 +1,215 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# 🚀 Estructura del Proyecto Backend - BusManage
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## 📁 Estructura de Carpetas
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ npm install
+```
+bus-management-api/
+├── prisma/
+│   ├── migrations/       # Migraciones de base de datos
+│   └── schema.prisma     # Schema de Prisma
+│
+├── src/
+│   ├── auth/             # Módulo de autenticación
+│   │   ├── decorators/
+│   │   │   ├── current-user.decorator.ts
+│   │   │   └── public.decorator.ts
+│   │   ├── guards/
+│   │   │   └──jwt-auth.guard.ts
+│   │   ├── strategies/
+│   │   │   └── jwt.strategy.ts
+│   │   ├── dto/
+│   │   │   ├── login.dto.ts
+│   │   │   ├── register.dto.ts
+│   │   │   └── refresh-token.dto.ts
+│   │   ├── auth.controller.ts
+│   │   ├── auth.service.ts
+│   │   └── auth.module.ts
+│   │
+│   ├── prisma/         # Módulo de Prisma
+│   │   ├── prisma.service.ts
+│   │   └── prisma.module.ts
+│   │
+│   ├── config/         # Configuración
+│   │   ├── app.config.ts
+│   │   ├── database.config.ts
+│   │   └── jwt.config.ts
+│   │
+│   ├── app.controller.ts       # Controlador principal
+│   ├── app.service.ts          # Servicio principal
+│   ├── app.module.ts           # Módulo raíz
+│   └── main.ts                 # Entry point
+│
+├── test/                       # Tests
+│   ├── e2e/
+│   │   └── app.e2e-spec.ts
+│   └── unit/
+│       └── (tests unitarios)
+│
+├── .env                       # Variables de entorno
+├── .env.example               # Ejemplo de variables
+├── .eslintrc.js               # Configuración ESLint
+├── .prettierrc                # Configuración Prettier
+├── .gitignore                 # Git ignore
+├── docker-compose.yml         # Docker compose
+├── Dockerfile                 # Dockerfile
+├── nest-cli.json              # Configuración Nest CLI
+├── package.json               # Dependencies
+├── tsconfig.json              # TypeScript config
+└── README.md                  # Documentación
 ```
 
-## Compile and run the project
+---
+
+## 🔧 Comandos de Setup
+
+### Paso 1: Instalar Dependencias
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
 ```
 
-## Run tests
+### Paso 2: Configurar Variables de Entorno
 
 ```bash
-# unit tests
-$ npm run test
+# Copiar ejemplo y editar
+cp .env.example .env
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+# Editar .env con tus valores
+nano .env
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### Paso 3: Levantar Base de Datos
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# Iniciar PostgreSQL con Docker
+docker-compose up -d postgres
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Paso 4: Configurar Prisma
 
-## Resources
+```bash
+# Generar cliente de Prisma
+npx prisma generate
 
-Check out a few resources that may come in handy when working with NestJS:
+# Crear y aplicar migraciones
+npx prisma migrate dev --name init
+```
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+### Paso 5: Iniciar Servidor
 
-## Support
+```bash
+# Modo desarrollo
+npm run start:dev
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+# El servidor iniciará en http://localhost:3000
+```
 
-## Stay in touch
+### Paso 6: Verificar
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+```bash
+# Health check
+curl http://localhost:3000/api/health
+```
+
+---
+
+## 📊 Módulos y Responsabilidades
+
+| Módulo   | Responsabilidad                   |
+| -------- | --------------------------------- |
+| **auth** | Login, registro, tokens, permisos |
+
+---
+
+## 🔐 Seguridad
+
+- ✅ JWT para autenticación
+- ✅ Login/Register endpoints
+- ✅ Password hashing (bcrypt)
+- ✅ Auth guards para proteger rutas
+- ✅ Role-based access control
+
+---
+
+## 🔧 Comandos Útiles
+
+```bash
+# Generar nuevo módulo
+nest g module nombre
+nest g controller nombre
+nest g service nombre
+
+# Generar recurso completo (CRUD)
+nest g resource nombre
+
+# Ver estructura del proyecto
+tree -I 'node_modules|dist'
+
+# Limpiar y reinstalar
+rm -rf node_modules package-lock.json
+npm install
+
+# Reset de base de datos
+npm run db:reset
+
+# Prisma Studio (GUI)
+npm run prisma:studio
+
+# Logs de Docker
+docker-compose logs -f
+
+# Rebuild Docker
+docker-compose down
+docker-compose up --build
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### Error: Cannot connect to database
+
+```bash
+# Verificar que Postgre esté corriendo
+docker ps
+
+# Ver logs de PostgreSQL
+docker-compose logs postgres
+
+# Recrear contenedor
+docker-compose down
+docker-compose up -d postgres
+```
+
+### Error: Prisma Client not found
+
+```bash
+# Regenerar cliente
+npx prisma generate
+```
+
+### Error: Port 3000 already in use
+
+```bash
+# Cambiar puerto en .env
+PORT=3001
+
+# O matar proceso
+lsof -ti:3000 | xargs kill -9
+```
+
+---
+
+## 📚 Recursos
+
+- [NestJS Documentation](https://docs.nestjs.com/)
+- [Prisma Documentation](https://www.prisma.io/docs/)
+- [Swagger/OpenAPI](https://swagger.io/specification/)
+- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+- [Docker Documentation](https://docs.docker.com/)
+
+---
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+[MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
