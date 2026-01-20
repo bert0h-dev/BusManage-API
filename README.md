@@ -9,27 +9,33 @@ bus-management-api/
 │   └── schema.prisma     # Schema de Prisma
 │
 ├── src/
-│   ├── auth/             # Módulo de autenticación
+│   ├── auth/                   # Módulo de autenticación
 │   │   ├── decorators/
 │   │   │   ├── current-user.decorator.ts
+│   │   │   ├── roles.decorator.ts
 │   │   │   └── public.decorator.ts
 │   │   ├── guards/
-│   │   │   └──jwt-auth.guard.ts
+│   │   │   └── jwt-auth.guard.ts
+│   │   ├── interfaces/
+│   │   │   ├── auth-response.interface.ts
+│   │   │   └── jwt-payload.interface.ts
 │   │   ├── strategies/
 │   │   │   └── jwt.strategy.ts
 │   │   ├── dto/
 │   │   │   ├── login.dto.ts
 │   │   │   ├── register.dto.ts
-│   │   │   └── refresh-token.dto.ts
+│   │   │   ├── change-password.dto.ts
+│   │   │   ├── forgot-password.dto.ts
+│   │   │   └── reset-password.dto.ts
 │   │   ├── auth.controller.ts
 │   │   ├── auth.service.ts
 │   │   └── auth.module.ts
 │   │
-│   ├── prisma/         # Módulo de Prisma
+│   ├── prisma/                 # Módulo de Prisma
 │   │   ├── prisma.service.ts
 │   │   └── prisma.module.ts
 │   │
-│   ├── config/         # Configuración
+│   ├── config/                 # Configuración
 │   │   ├── app.config.ts
 │   │   ├── database.config.ts
 │   │   └── jwt.config.ts
