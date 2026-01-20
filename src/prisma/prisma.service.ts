@@ -3,7 +3,6 @@ import {
   OnModuleInit,
   OnModuleDestroy,
   Logger,
-  INestApplication,
 } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';

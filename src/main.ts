@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as compression from 'compression';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -12,6 +13,11 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get('port') || 3000;
   const apiPrefix = configService.get('apiPrefix') || 'api';
+
+  // =============== PERFORMACE =================
+
+  // Compresión de respuestas
+  app.use(compression());
 
   // =============== PIPES =================
   // Validación global de DTO's
