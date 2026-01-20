@@ -10,6 +10,7 @@ import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import throttlerConfig from './config/throttler.config';
+import securityConfig from './config/security.config';
 
 // Módulos core
 import { PrismaModule } from './prisma/prisma.module';
@@ -20,7 +21,7 @@ import { AuthModule } from './auth/auth.module';
     // ============== CONFIGURACIÓN GLOBAL ==============
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, jwtConfig, throttlerConfig],
+      load: [appConfig, databaseConfig, jwtConfig, throttlerConfig, securityConfig],
       envFilePath: ['.env'],
       cache: true,
     }),

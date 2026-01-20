@@ -11,8 +11,8 @@ async function bootstrap() {
 
   // Obtener configuraciones
   const configService = app.get(ConfigService);
-  const port = configService.get('PORT') || 4000;
-  const apiPrefix = configService.get('API_PREFIX') || 'api';
+  const port = configService.get('app.port') || 4000;
+  const apiPrefix = configService.get('app.apiPrefix') || 'api';
 
   // =============== PIPES =================
 
@@ -75,8 +75,8 @@ async function bootstrap() {
 
   📍 Server running on:     ${url}
   📚 API Documentation:     ${url}/${apiPrefix}/docs
-  🔧 Environment:           ${configService.get('NODE_ENV')}
-  🗄️ Database:              ${configService.get('DATABASE_URL') ? '✅ Connected' : '❌ Not configured'}
+  🔧 Environment:           ${configService.get('app.env')}
+  🗄️ Database:              ${configService.get('database.url') ? '✅ Connected' : '❌ Not configured'}
   
   ⏰ Started at:            ${new Date().toLocaleString()}
   

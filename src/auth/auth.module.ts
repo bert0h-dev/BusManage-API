@@ -15,7 +15,7 @@ import { PrismaModule } from '../prisma/prisma.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get('JWT_SECRET'),
+        secret: configService.get('jwt.secretTtl'),
       }),
     }),
   ],

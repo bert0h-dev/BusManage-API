@@ -19,6 +19,7 @@ import { ChangePassowrdDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { time } from 'console';
 
 @Injectable()
 export class AuthService {
@@ -210,9 +211,10 @@ export class AuthService {
       };
     }
 
-    // Generar token de reset (válido por 1 hora)
+    // Generar token de reset
+    const resetTokenTtlMs: number = this.configService.get('security.resetTokenTtlMs', 3600000);
     const resetToken = randomBytes(32).toString('hex');
-    const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hora
+    const resetTokenExpiry = new Date(Date.now() + resetTokenTtlMs);
 
     // Guardar token en la base de datos
     await this.prisma.user.update({
@@ -338,7 +340,7 @@ export class AuthService {
     };
 
     return this.jwtService.sign(payload, {
-      expiresIn: this.configService.get('JWT_EXPIRES_IN', '15m'),
+      expiresIn: this.configService.get('jwt.accessTokenTtl', '15m'),
     });
   }
 
@@ -354,7 +356,7 @@ export class AuthService {
     };
 
     return this.jwtService.sign(payload, {
-      expiresIn: this.configService.get('JWT_REFRESH_EXPIRES_IN', '15m'),
+      expiresIn: this.configService.get('jwt.refreshTokenTtl', '15m'),
     });
   }
 
@@ -372,7 +374,9 @@ export class AuthService {
     // Guardar refresh token hasheado en BD con timestamps para auditoría
     const hashedRefreshToken = await this.hashPassword(refreshToken);
     const now = new Date();
-    const refreshTokenExpiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 días
+    const refreshTokenExpiresAt = new Date(
+      now.getTime() + this.parseTimeStringToMs(this.configService.get('jwt.refreshTokenTtl', '7d')),
+    );
 
     await this.prisma.user.update({
       where: { id: userId },
@@ -392,7 +396,27 @@ export class AuthService {
    * Hash de contraseña
    */
   private async hashPassword(password: string): Promise<string> {
-    const saltRounds = 10;
+    const saltRounds = this.configService.get('security.bcryptRounds', 10);
     return bcrypt.hash(password, saltRounds);
+  }
+
+  /**
+   * Utility para convertir "7d", "15m", etc en milisegundos
+   */
+  private parseTimeStringToMs(timeStr: string): number {
+    const match = timeStr.match(/(\d+)([smhd])/);
+    if (!match) return 7 * 24 * 60 * 60 * 1000; // Default 7 días
+
+    const amount = parseInt(match[1], 10);
+    const unit = match[2];
+
+    const units: Record<string, number> = {
+      s: 1000,
+      m: 60 * 1000,
+      h: 60 * 60 * 1000,
+      d: 24 * 60 * 60 * 1000,
+    };
+
+    return amount * (units[unit] || 1000);
   }
 }
