@@ -1,8 +1,8 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import * as compression from 'compression';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -11,15 +11,11 @@ async function bootstrap() {
 
   // Obtener configuraciones
   const configService = app.get(ConfigService);
-  const port = configService.get('port') || 3000;
+  const port = configService.get('port') || 3002;
   const apiPrefix = configService.get('apiPrefix') || 'api';
 
-  // =============== PERFORMACE =================
-
-  // Compresión de respuestas
-  app.use(compression());
-
   // =============== PIPES =================
+
   // Validación global de DTO's
   app.useGlobalPipes(
     new ValidationPipe({
@@ -31,6 +27,39 @@ async function bootstrap() {
       },
     }),
   );
+
+  // =============== SWAGGER / OPENAPI DOCUMENTATION =================
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Bus Management API')
+    .setDescription(
+      'API para sistema de gestión de autobuses con venta de boletos, manejo de unidades, rutas y personal',
+    )
+    .setVersion('1.0')
+    .setContact('BusManage Team', '', 'support@busmanage.com')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Enter JWT token',
+        in: 'header',
+      },
+      'JWT-auth',
+    )
+    .addTag('Authentication', 'Autenticación y autorización')
+    .addServer(`http://localhost:${port}`, 'Development')
+    .build();
+
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup(`${apiPrefix}/docs`, app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+      docExpansion: 'none',
+      filter: true,
+      showRequestDuration: true,
+    },
+  });
 
   // =============== START SERVER =================
   await app.listen(port);
@@ -47,7 +76,7 @@ async function bootstrap() {
   📍 Server running on:     ${url}
   📚 API Documentation:     ${url}/${apiPrefix}/docs
   🔧 Environment:           ${configService.get('NODE_ENV')}
-  🗄️ Database:             ${configService.get('DATABASE_URL') ? '✅ Connected' : '❌ Not configured'}
+  🗄️ Database:              ${configService.get('DATABASE_URL') ? '✅ Connected' : '❌ Not configured'}
   
   ⏰ Started at:            ${new Date().toLocaleString()}
   

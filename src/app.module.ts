@@ -10,6 +10,7 @@ import jwtConfig from './config/jwt.config';
 
 // Módulos core
 import { PrismaModule } from './prisma/prisma.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { PrismaModule } from './prisma/prisma.module';
     }),
     // ============== MÓDULO CORE ==============
     PrismaModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

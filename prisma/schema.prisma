@@ -18,6 +18,7 @@ datasource db {
 enum UserRole {
   admin
   user
+  viewer
 }
 
 // =====================================================
@@ -25,16 +26,19 @@ enum UserRole {
 // =====================================================
 
 model User {
-  id           String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email        String @unique @db.VarChar(255)
-  passwordHash String @map("password_hash") @db.VarChar(255)
-  role         UserRole @default(user)
-  fullName     String @map("full_name") @db.VarChar(255)
-  isActive     Boolean @default(true) @map("is_active")
-  lastLogin    DateTime? @map("last_login") @db.Timestamp()
-  
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp()
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamp()
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email           String @unique @db.VarChar(255)
+  passwordHash    String @map("password_hash") @db.VarChar(255)
+  role            UserRole @default(user)
+  fullName        String @map("full_name") @db.VarChar(255)
+  isActive        Boolean @default(true) @map("is_active")
+
+  lastLogin        DateTime? @map("last_login") @db.Timestamp()
+  resetToken       String?   @map("reset_token") @db.VarChar(255)
+  resetTokenExpiry DateTime? @map("reset_token_expiry") @db.Timestamp()
+
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamp()
 
   @@index([email])
   @@index([role])
