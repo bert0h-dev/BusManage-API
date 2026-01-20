@@ -18,7 +18,7 @@ import { AuthModule } from './auth/auth.module';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig, databaseConfig, jwtConfig],
-      envFilePath: ['.env', '.env.local'],
+      envFilePath: ['.env'],
       cache: true,
     }),
     // ============== MÓDULO CORE ==============
