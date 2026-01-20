@@ -12,5 +12,6 @@ export interface AuthResponse {
     isActive: boolean;
     createdAt: Date;
   };
-  token: string;
+  accessToken: string;
+  refreshToken?: string;
 }

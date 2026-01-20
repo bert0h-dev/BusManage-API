@@ -15,10 +15,14 @@ BusManage API es una aplicación backend construida con **NestJS** que proporcio
 
 ### Características principales
 
-- 🔐 **Autenticación JWT** con Passport.js
+- 🔐 **Autenticación JWT** con Passport.js y Refresh Tokens
 - 👥 **Control de roles y permisos** (admin, user, viewer)
 - 🔑 **Recuperación de contraseña** con tokens seguros
 - 🛡️ **Contraseñas hasheadas** con bcrypt
+- 🔄 **Refresh Token** para renovación segura de sesiones (7 días)
+- 📊 **Auditoría de sesiones** con timestamps de creación y expiración
+- 🚫 **Logout** con revocación de refresh tokens
+- 📈 **Rate Limiting** para protección contra ataques de fuerza bruta
 - 📚 **Documentación API** automática con Swagger/OpenAPI
 - ✅ **Validación robusta** con class-validator y class-transformer
 - 🗄️ **ORM moderno** con Prisma y PostgreSQL
@@ -49,6 +53,7 @@ bus-manage-api/
 │   │   │   ├── forgot-password.dto.ts
 │   │   │   ├── login.dto.ts
 │   │   │   ├── register.dto.ts
+│   │   │   ├── refresh-token.dto.ts
 │   │   │   └── reset-password.dto.ts
 │   │   ├── guards/           # Guards de protección
 │   │   │   └── jwt-auth.guard.ts
@@ -64,6 +69,7 @@ bus-manage-api/
 │   ├── 📁 config/            # Configuración de la app
 │   │   ├── app.config.ts
 │   │   ├── database.config.ts
+│   │   ├── throttler.config.ts
 │   │   └── jwt.config.ts
 │   │
 │   ├── 📁 prisma/            # Módulo de Prisma ORM
@@ -132,7 +138,12 @@ DATABASE_URL=postgresql://user:password@localhost:5432/busmanage
 
 # JWT
 JWT_SECRET=your_super_secret_jwt_key_here_min_32_chars
-JWT_EXPIRATION=24h
+JWT_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+
+# Rate Limiting
+THROTTLE_TTL=60
+THROTTLE_LIMIT=10
 ```
 
 ### 4️⃣ Iniciar la Base de Datos
@@ -256,6 +267,7 @@ npx prisma generate
 | **Passport.js**     | 0.7.x   | Estrategias de autenticación |
 | **bcrypt**          | 6.x     | Hash de contraseñas          |
 | **class-validator** | 0.14.x  | Validación de DTOs           |
+| **Throttler**       | 5.x     | Rate Limiting                |
 | **Swagger**         | 11.x    | Documentación API            |
 | **Docker**          | 24.x    | Containerización             |
 | **Jest**            | 30.x    | Testing framework            |
@@ -276,9 +288,11 @@ http://localhost:3000/api/docs
 
 #### 🔐 Autenticación (`/api/auth`)
 
-- `POST /auth/register` - Registrar nuevo usuario
-- `POST /auth/login` - Login con email y contraseña
-- `POST /auth/forgot-password` - Solicitar reset de contraseña
+- `POST /auth/register` - Registrar nuevo usuario (⚠️ Rate limit: 5/10 min)
+- `POST /auth/login` - Login con email y contraseña (⚠️ Rate limit: 3/15 min)
+- `POST /auth/refresh` - Renovar access token con refresh token (⚠️ Rate limit: 10/60 seg)
+- `POST /auth/logout` - Cerrar sesión (requiere JWT)
+- `POST /auth/forgot-password` - Solicitar reset de contraseña (⚠️ Rate limit: 3/30 min)
 - `POST /auth/reset-password` - Resetear contraseña con token
 - `POST /auth/change-password` - Cambiar contraseña (requiere autenticación)
 
@@ -290,14 +304,46 @@ http://localhost:3000/api/docs
 
 ## 🔐 Autenticación y Seguridad
 
-### Sistema de Autenticación
+### Sistema de Autenticación con Refresh Token
 
-Este proyecto implementa autenticación **JWT** (JSON Web Tokens) con **Passport.js**:
+Este proyecto implementa autenticación **JWT** (JSON Web Tokens) con **Passport.js** y **Refresh Tokens** para mayor seguridad:
 
 1. **Login**: El usuario envía credenciales a `/auth/login`
-2. **Token**: El servidor retorna un JWT con expiración de 24 horas
-3. **Requests**: El cliente envía el token en header `Authorization: Bearer <token>`
-4. **Validación**: El servidor valida el token en cada request protegido
+2. **Tokens**: El servidor retorna:
+   - `accessToken` (JWT de corta duración: 15 minutos) - Para requests
+   - `refreshToken` (JWT de larga duración: 7 días) - Para renovación
+3. **Requests**: El cliente envía el `accessToken` en header `Authorization: Bearer <token>`
+4. **Renovación**: Cuando el `accessToken` expira, usar `refreshToken` en `/auth/refresh` para obtener nuevos tokens
+5. **Logout**: El `refreshToken` es revocado en la BD para invalidad la sesión
+
+### Rate Limiting (Protección contra ataques)
+
+Rate limiting está implementado usando `@nestjs/throttler` para proteger endpoints críticos:
+
+| Endpoint                     | Límite      | Ventana     | Propósito                     |
+| ---------------------------- | ----------- | ----------- | ----------------------------- |
+| `POST /auth/register`        | 5 requests  | 10 minutos  | Prevenir spam                 |
+| `POST /auth/login`           | 3 requests  | 15 minutos  | Prevenir fuerza bruta         |
+| `POST /auth/forgot-password` | 3 requests  | 30 minutos  | Prevenir abuso                |
+| `POST /auth/refresh`         | 10 requests | 60 segundos | Permitir renovación frecuente |
+| **Global**                   | 10 requests | 60 segundos | Protección general            |
+
+Respuesta cuando se alcanza el límite (HTTP 429):
+
+```json
+{
+  "statusCode": 429,
+  "message": "ThrottlerException: Too Many Requests"
+}
+```
+
+Headers adicionales:
+
+```
+X-RateLimit-Limit: 3
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1642704900000
+```
 
 ### Roles y Permisos
 
@@ -309,23 +355,90 @@ enum UserRole {
 }
 ```
 
-### Ejemplo de uso con JWT
+### Ejemplo de flujo completo de Autenticación
 
 ```bash
-# 1. Login
+# 1. Registrarse (Rate limit: 5 intentos / 10 minutos)
+curl -X POST http://localhost:3000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email":"newuser@example.com",
+    "password":"SecurePass123!",
+    "fullName":"John Doe"
+  }'
+
+# Respuesta:
+{
+  "user": {
+    "id": "uuid-123",
+    "email": "newuser@example.com",
+    "fullName": "John Doe",
+    "role": "user",
+    "isActive": true,
+    "createdAt": "2026-01-20T10:00:00Z"
+  },
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+
+# 2. Login (Rate limit: 3 intentos / 15 minutos)
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"user@example.com","password":"password123"}'
 
-# Respuesta:
-# {
-#   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-#   "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-# }
+# Respuesta: accessToken + refreshToken
 
-# 2. Usar el token en requests
-curl -X GET http://localhost:3000/api/users \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+# 3. Usar accessToken en requests normales
+curl -X GET http://localhost:3000/api/auth/session-info \
+  -H "Authorization: Bearer <accessToken>"
+
+# 4. Cuando accessToken expira (15 min después), renovar con refreshToken
+# (Rate limit: 10 intentos / 60 segundos)
+curl -X POST http://localhost:3000/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"<refreshToken>"}'
+
+# Respuesta: nuevos accessToken + refreshToken
+
+# 5. Logout (revoca el refreshToken en BD)
+curl -X POST http://localhost:3000/api/auth/logout \
+  -H "Authorization: Bearer <accessToken>"
+
+# Respuesta:
+{
+  "message": "Sesión cerrada correctamente"
+}
+```
+
+### Cambio de contraseña
+
+```bash
+curl -X POST http://localhost:3000/api/auth/change-password \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "currentPassword":"password123",
+    "newPassword":"NewSecurePass456!"
+  }'
+```
+
+### Recuperación de contraseña
+
+```bash
+# 1. Solicitar reset
+curl -X POST http://localhost:3000/api/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com"}'
+
+# 2. Usuario recibe email con token (en desarrollo, verificar logs)
+
+# 3. Resetear contraseña con token
+curl -X POST http://localhost:3000/api/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token":"<reset_token_from_email>",
+    "newPassword":"NewSecurePass456!"
+  }'
 ```
 
 ---
@@ -481,19 +594,26 @@ npm run format
 
 ```prisma
 model User {
-  id                String @id @default(dbgenerated("gen_random_uuid()"))
-  email             String @unique
-  passwordHash      String
-  role              UserRole @default(user)
-  fullName          String
-  isActive          Boolean @default(true)
+  id                    String @id @default(dbgenerated("gen_random_uuid()"))
+  email                 String @unique
+  passwordHash          String
+  role                  UserRole @default(user)
+  fullName              String
+  isActive              Boolean @default(true)
 
-  lastLogin         DateTime?
-  resetToken        String?
-  resetTokenExpiry  DateTime?
+  // Session Management
+  lastLogin             DateTime?
+  refreshTokenHash      String?
+  refreshTokenCreatedAt DateTime?
+  refreshTokenExpiresAt DateTime?
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  // Password Recovery
+  resetToken            String?
+  resetTokenExpiry      DateTime?
+
+  // Audit
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }
 
 enum UserRole {
@@ -502,6 +622,16 @@ enum UserRole {
   viewer   // Solo lectura
 }
 ```
+
+#### Campos de Auditoría
+
+| Campo                   | Propósito                     | Uso                    |
+| ----------------------- | ----------------------------- | ---------------------- |
+| `refreshTokenCreatedAt` | Fecha de emisión del token    | Auditoría de sesión    |
+| `refreshTokenExpiresAt` | Fecha de expiración del token | Auditoría de sesión    |
+| `lastLogin`             | Último login exitoso          | Auditoría de seguridad |
+| `createdAt`             | Fecha de creación de usuario  | Auditoría general      |
+| `updatedAt`             | Última modificación de perfil | Auditoría general      |
 
 ---
 
@@ -581,4 +711,15 @@ Este proyecto está bajo licencia **MIT**.
 
 ---
 
-**Última actualización:** enero 2026
+**Última actualización:** enero 2026 (v1.0.0)
+
+### ✅ Versión actual incluye:
+
+- ✅ Autenticación JWT con Refresh Tokens
+- ✅ Rate Limiting en endpoints críticos
+- ✅ Auditoría de sesiones completa
+- ✅ Logout con revocación de tokens
+- ✅ Recuperación de contraseña
+- ✅ Cambio de contraseña
+- ✅ Validación de datos robusta
+- ✅ Documentación API interactiva

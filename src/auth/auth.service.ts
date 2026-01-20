@@ -18,6 +18,7 @@ import { UserRole } from '@prisma/client';
 import { ChangePassowrdDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 @Injectable()
 export class AuthService {
@@ -65,11 +66,12 @@ export class AuthService {
     });
 
     // Generar token
-    const token = this.generateToken(user.id, user.email, user.role);
+    const tokens = await this.generateTokenPair(user.id, user.email, user.role);
 
     return {
       user,
-      token,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
     };
   }
 
@@ -115,14 +117,15 @@ export class AuthService {
     });
 
     // Generar token
-    const token = this.generateToken(user.id, user.email, user.role);
+    const tokens = await this.generateTokenPair(user.id, user.email, user.role);
 
     // Remover password del objeto
     const { passwordHash, ...userWithoutPassowrd } = user;
 
     return {
       user: userWithoutPassowrd,
-      token,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
     };
   }
 
@@ -171,10 +174,7 @@ export class AuthService {
     }
 
     // Verificar contraseña actual
-    const isPasswordValid = await bcrypt.compare(
-      currentPassword,
-      user.passwordHash,
-    );
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
 
     if (!isPasswordValid) {
       throw new BadRequestException('Contraseña actual incorrecta');
@@ -195,9 +195,7 @@ export class AuthService {
   /**
    * Solicitar restablecimiento de contraseña
    */
-  async forgotPassowrd(
-    forgotPassowrdDto: ForgotPasswordDto,
-  ): Promise<{ message: string }> {
+  async forgotPassowrd(forgotPassowrdDto: ForgotPasswordDto): Promise<{ message: string }> {
     const { email } = forgotPassowrdDto;
 
     // Buscar usuario
@@ -208,8 +206,7 @@ export class AuthService {
     // No revelar si el usuario existe o no
     if (!user) {
       return {
-        message:
-          'Si el email existe, recibirás instrucciones para restablecer tu contraseña*',
+        message: 'Si el email existe, recibirás instrucciones para restablecer tu contraseña*',
       };
     }
 
@@ -229,17 +226,14 @@ export class AuthService {
     // Aqui va el envio email con el link
 
     return {
-      message:
-        'Si el email existe, recibirás instrucciones para restablecer tu contraseña',
+      message: 'Si el email existe, recibirás instrucciones para restablecer tu contraseña',
     };
   }
 
   /**
    * Restablecer contraseña con token
    */
-  async resetpassword(
-    resetPasswordDto: ResetPasswordDto,
-  ): Promise<{ message: string }> {
+  async resetpassword(resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
     const { token, newPassword } = resetPasswordDto;
 
     // Buscar usuario con el token válido
@@ -275,34 +269,124 @@ export class AuthService {
   }
 
   /**
-   * Verificar si un token es válido
+   * Renovar access token usando refresh token
    */
-  async verifyToken(token: string): Promise<boolean> {
+  async refreshAccessToken(
+    refreskTokenDto: RefreshTokenDto,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const { refreshToken } = refreskTokenDto;
+
     try {
-      const payload = this.jwtService.verify(token);
+      // Verificar que el refresh token sea valido
+      const payload = this.jwtService.verify(refreshToken);
+
+      if (payload.type !== 'refresh') {
+        throw new UnauthorizedException('Token inválido');
+      }
+
+      // Buscar usuario
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
       });
-      return !!user && user.isActive;
-    } catch {
-      return false;
+
+      if (!user || !user.isActive) {
+        throw new UnauthorizedException('Usuario no encontrado o inactivo');
+      }
+
+      // Verificar que el refresh token coincida con el guardado
+      const isTokenValid = await bcrypt.compare(refreshToken, user.refreshTokenHash || '');
+      if (!isTokenValid) {
+        throw new UnauthorizedException('Refresh token inválido o revocado');
+      }
+
+      // Genera nuevo par de tokens
+      const tokens = await this.generateTokenPair(user.id, user.email, user.role);
+
+      return tokens;
+    } catch (error) {
+      throw new UnauthorizedException('Refresh token expirado o inválido');
     }
+  }
+
+  /**
+   * Logout - Revocar refresh token
+   */
+  async logout(userId: string): Promise<{ message: string }> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        refreshTokenHash: null,
+        refreshTokenCreatedAt: null,
+        refreshTokenExpiresAt: null,
+      },
+    });
+
+    return { message: 'Sesión cerrada correctamente' };
   }
 
   // ============= MÉTODOS PRIVADOS =============
 
   /**
-   * Generar token JWT
+   * Genera access token (Corta duracion)
    */
-  private generateToken(userId: string, email: string, role: UserRole): string {
+  private generateAccessToken(userId: string, email: string, role: UserRole): string {
     const payload: JwtPayload = {
       sub: userId,
       email,
       role,
+      type: 'access',
     };
 
-    return this.jwtService.sign(payload);
+    return this.jwtService.sign(payload, {
+      expiresIn: this.configService.get('JWT_EXPIRES_IN', '15m'),
+    });
   }
+
+  /**
+   * Generar refresh token (larga duración)
+   */
+  private generateRefreshToken(userId: string, email: string, role: UserRole): string {
+    const payload: JwtPayload = {
+      sub: userId,
+      email,
+      role,
+      type: 'refresh',
+    };
+
+    return this.jwtService.sign(payload, {
+      expiresIn: this.configService.get('JWT_REFRESH_EXPIRES_IN', '15m'),
+    });
+  }
+
+  /**
+   * Generar ambos tokens
+   */
+  private async generateTokenPair(
+    userId: string,
+    email: string,
+    role: UserRole,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const accessToken = this.generateAccessToken(userId, email, role);
+    const refreshToken = this.generateRefreshToken(userId, email, role);
+
+    // Guardar refresh token hasheado en BD con timestamps para auditoría
+    const hashedRefreshToken = await this.hashPassword(refreshToken);
+    const now = new Date();
+    const refreshTokenExpiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 días
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        refreshTokenHash: hashedRefreshToken,
+        refreshTokenCreatedAt: now,
+        refreshTokenExpiresAt,
+      },
+    });
+
+    return { accessToken, refreshToken };
+  }
+
+  // ============= MÉTODOS PRIVADOS =============
 
   /**
    * Hash de contraseña

@@ -9,4 +9,5 @@ export interface JwtPayload {
   role: UserRole; // Rol del usuario
   iat?: number; // Fecha de creación del token (timestamp)
   exp?: number; // Fecha de expiración del token (timestamp)
+  type: string; // El tipo de token generado
 }

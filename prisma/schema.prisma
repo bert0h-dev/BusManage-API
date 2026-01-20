@@ -33,9 +33,13 @@ model User {
   fullName        String @map("full_name") @db.VarChar(255)
   isActive        Boolean @default(true) @map("is_active")
 
-  lastLogin        DateTime? @map("last_login") @db.Timestamp()
-  resetToken       String?   @map("reset_token") @db.VarChar(255)
-  resetTokenExpiry DateTime? @map("reset_token_expiry") @db.Timestamp()
+  lastLogin              DateTime? @map("last_login") @db.Timestamp()
+  refreshTokenHash       String?   @map("refresh_token_hash") @db.VarChar(500)
+  refreshTokenCreatedAt  DateTime? @map("refresh_token_created_at") @db.Timestamp()
+  refreshTokenExpiresAt  DateTime? @map("refresh_token_expires_at") @db.Timestamp()
+  
+  resetToken             String?   @map("reset_token") @db.VarChar(255)
+  resetTokenExpiry       DateTime? @map("reset_token_expiry") @db.Timestamp()
 
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp()
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamp()

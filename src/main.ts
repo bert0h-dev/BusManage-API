@@ -11,8 +11,8 @@ async function bootstrap() {
 
   // Obtener configuraciones
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('port') || 4000;
-  const apiPrefix = configService.get<string>('apiPrefix') || 'api';
+  const port = configService.get('PORT') || 4000;
+  const apiPrefix = configService.get('API_PREFIX') || 'api';
 
   // =============== PIPES =================
 
