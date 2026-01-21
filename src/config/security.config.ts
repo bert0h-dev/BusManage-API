@@ -12,4 +12,7 @@ export default registerAs('security', () => ({
   passwordRequireUppercase: process.env.PASSWORD_REQUIRE_UPPERCASE === 'true',
   passwordRequireNumbers: process.env.PASSWORD_REQUIRE_NUMBERS === 'true',
   passwordRequireSpecialChars: process.env.PASSWORD_REQUIRE_SPECIAL_CHARS === 'true',
+
+  // Request Timeout
+  requestTimeOut: parseInt(process.env.REQUEST_TIMEOUT || '30000', 10),
 }));

@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  ConflictException,
-  BadRequestException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -13,13 +7,20 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
-import { AuthResponse } from './interfaces/auth-response.interface';
 import { UserRole } from '@prisma/client';
 import { ChangePassowrdDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { time } from 'console';
+import {
+  EmailAlreadyExistsException,
+  InvalidCredentialsException,
+  InvalidCurrentPasswordException,
+  InvalidTokenException,
+  PasswordTooWeakException,
+  UserNotFoundException,
+} from '../common/exceptions/auth.exception';
+import { MessageOnlyResponseDto, SuccessResponseDto } from '../common/dtos/response.dto';
 
 @Injectable()
 export class AuthService {
@@ -32,7 +33,7 @@ export class AuthService {
   /**
    * Registrar nuevo usuario
    */
-  async register(registerDto: RegisterDto): Promise<AuthResponse> {
+  async register(registerDto: RegisterDto): Promise<SuccessResponseDto> {
     const { email, password, fullName, role } = registerDto;
 
     // Verificar si el email ya existe
@@ -41,8 +42,10 @@ export class AuthService {
     });
 
     if (existingUser) {
-      throw new ConflictException('El email ya está registrado');
+      throw new EmailAlreadyExistsException();
     }
+
+    this.validatePasswordStrength(password);
 
     // Hash de la contraseña
     const hashedPassword = await this.hashPassword(password);
@@ -70,16 +73,19 @@ export class AuthService {
     const tokens = await this.generateTokenPair(user.id, user.email, user.role);
 
     return {
-      user,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
+      message: 'Usuario registrado exitosamente',
+      data: {
+        user,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      },
     };
   }
 
   /**
    * Login de usuario
    */
-  async login(LoginDto: LoginDto): Promise<AuthResponse> {
+  async login(LoginDto: LoginDto): Promise<SuccessResponseDto> {
     const { email, password } = LoginDto;
 
     // Buscar usuario
@@ -97,18 +103,18 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Credenciables inválidad');
+      throw new InvalidCredentialsException();
     }
 
     // Verificar si está activo
     if (!user.isActive) {
-      throw new UnauthorizedException('Usuario inactivo');
+      throw new InvalidCredentialsException();
     }
 
     // Verificar contraseña
     const isPassowrdValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPassowrdValid) {
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new InvalidCredentialsException();
     }
 
     // Actualizar último login
@@ -124,9 +130,12 @@ export class AuthService {
     const { passwordHash, ...userWithoutPassowrd } = user;
 
     return {
-      user: userWithoutPassowrd,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
+      message: 'Login exitoso',
+      data: {
+        user: userWithoutPassowrd,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      },
     };
   }
 
@@ -162,7 +171,7 @@ export class AuthService {
   async changePassowrd(
     userId: string,
     changePassowrdDto: ChangePassowrdDto,
-  ): Promise<{ message: string }> {
+  ): Promise<MessageOnlyResponseDto> {
     const { currentPassword, newPassword } = changePassowrdDto;
 
     // Buscar usuario
@@ -171,15 +180,17 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new NotFoundException('Usuario no encontrado');
+      throw new UserNotFoundException();
     }
 
     // Verificar contraseña actual
     const isPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
 
     if (!isPasswordValid) {
-      throw new BadRequestException('Contraseña actual incorrecta');
+      throw new InvalidCurrentPasswordException();
     }
+
+    this.validatePasswordStrength(newPassword);
 
     // Hash de nueva contraseña
     const hashedPassword = await this.hashPassword(newPassword);
@@ -196,7 +207,7 @@ export class AuthService {
   /**
    * Solicitar restablecimiento de contraseña
    */
-  async forgotPassowrd(forgotPassowrdDto: ForgotPasswordDto): Promise<{ message: string }> {
+  async forgotPassowrd(forgotPassowrdDto: ForgotPasswordDto): Promise<MessageOnlyResponseDto> {
     const { email } = forgotPassowrdDto;
 
     // Buscar usuario
@@ -235,7 +246,7 @@ export class AuthService {
   /**
    * Restablecer contraseña con token
    */
-  async resetpassword(resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
+  async resetpassword(resetPasswordDto: ResetPasswordDto): Promise<MessageOnlyResponseDto> {
     const { token, newPassword } = resetPasswordDto;
 
     // Buscar usuario con el token válido
@@ -273,9 +284,7 @@ export class AuthService {
   /**
    * Renovar access token usando refresh token
    */
-  async refreshAccessToken(
-    refreskTokenDto: RefreshTokenDto,
-  ): Promise<{ accessToken: string; refreshToken: string }> {
+  async refreshAccessToken(refreskTokenDto: RefreshTokenDto): Promise<SuccessResponseDto> {
     const { refreshToken } = refreskTokenDto;
 
     try {
@@ -283,7 +292,7 @@ export class AuthService {
       const payload = this.jwtService.verify(refreshToken);
 
       if (payload.type !== 'refresh') {
-        throw new UnauthorizedException('Token inválido');
+        throw new InvalidTokenException('refresh token');
       }
 
       // Buscar usuario
@@ -292,28 +301,31 @@ export class AuthService {
       });
 
       if (!user || !user.isActive) {
-        throw new UnauthorizedException('Usuario no encontrado o inactivo');
+        throw new InvalidTokenException('refresh token');
       }
 
       // Verificar que el refresh token coincida con el guardado
       const isTokenValid = await bcrypt.compare(refreshToken, user.refreshTokenHash || '');
       if (!isTokenValid) {
-        throw new UnauthorizedException('Refresh token inválido o revocado');
+        throw new InvalidTokenException('refresh token');
       }
 
       // Genera nuevo par de tokens
       const tokens = await this.generateTokenPair(user.id, user.email, user.role);
 
-      return tokens;
+      return {
+        message: 'Tokens renovados exitosamente',
+        data: tokens,
+      };
     } catch (error) {
-      throw new UnauthorizedException('Refresh token expirado o inválido');
+      throw new InvalidTokenException('refresh token');
     }
   }
 
   /**
    * Logout - Revocar refresh token
    */
-  async logout(userId: string): Promise<{ message: string }> {
+  async logout(userId: string): Promise<MessageOnlyResponseDto> {
     await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -418,5 +430,40 @@ export class AuthService {
     };
 
     return amount * (units[unit] || 1000);
+  }
+
+  /**
+   * Validar fortaleza de contraseña
+   */
+  private validatePasswordStrength(password: string): void {
+    const minLength = this.configService.get('security.passwordMinLength');
+    const requireUppercase = this.configService.get('security.passwordRequireUppercase', false);
+    const requireNumbers = this.configService.get('security.passwordRequireNumbers', false);
+    const requireSpecialChars = this.configService.get(
+      'security.passwordRequireSpecialChars',
+      false,
+    );
+
+    const requirements: string[] = [];
+
+    if (password.length < minLength) {
+      requirements.push(`mínimo ${minLength} caracteres`);
+    }
+
+    if (requireUppercase && !/[A-Z]/.test(password)) {
+      requirements.push('una letra mayúscula');
+    }
+
+    if (requireNumbers && !/[0-9]/.test(password)) {
+      requirements.push('un número');
+    }
+
+    if (requireSpecialChars && !/[!@#$%^&*]/.test(password)) {
+      requirements.push('un carácter especial (!@#$%^&*)');
+    }
+
+    if (requirements.length > 0) {
+      throw new PasswordTooWeakException(requirements);
+    }
   }
 }

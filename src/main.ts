@@ -3,6 +3,9 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -14,7 +17,7 @@ async function bootstrap() {
   const port = configService.get('app.port') || 4000;
   const apiPrefix = configService.get('app.apiPrefix') || 'api';
 
-  // =============== PIPES =================
+  // =============== PIPES, FILTERS E INTERCEPTORS =================
 
   // Validación global de DTO's
   app.useGlobalPipes(
@@ -27,6 +30,12 @@ async function bootstrap() {
       },
     }),
   );
+
+  // Filtros de excepciones
+  app.useGlobalFilters(new HttpExceptionFilter());
+
+  // Interceptors globales
+  app.useGlobalInterceptors(new TimeoutInterceptor(configService), new ResponseInterceptor());
 
   // =============== SWAGGER / OPENAPI DOCUMENTATION =================
   const swaggerConfig = new DocumentBuilder()
