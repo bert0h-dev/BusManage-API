@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
@@ -16,6 +16,16 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get('app.port') || 4000;
   const apiPrefix = configService.get('app.apiPrefix') || 'api';
+
+  // =============== SEGURIDAD =================
+
+  // CORS
+  app.enableCors({
+    origin: configService.get('app.crossOrigin')?.split(',') || [`http://localhost:${port}`],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  });
 
   // =============== PIPES, FILTERS E INTERCEPTORS =================
 
@@ -36,6 +46,17 @@ async function bootstrap() {
 
   // Interceptors globales
   app.useGlobalInterceptors(new TimeoutInterceptor(configService), new ResponseInterceptor());
+
+  // =============== API CONFIGURATION =================
+
+  // Prefijo global de API
+  app.setGlobalPrefix(apiPrefix);
+
+  // Versionado de API
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+  });
 
   // =============== SWAGGER / OPENAPI DOCUMENTATION =================
   const swaggerConfig = new DocumentBuilder()

@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "UserRole" AS ENUM ('admin', 'user');
+CREATE TYPE "UserRole" AS ENUM ('admin', 'user', 'viewer');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -9,6 +9,11 @@ CREATE TABLE "users" (
     "role" "UserRole" NOT NULL DEFAULT 'user',
     "full_name" VARCHAR(255) NOT NULL,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "refresh_token_hash" VARCHAR(500),
+    "refresh_token_created_at" TIMESTAMP,
+    "refresh_token_expires_at" TIMESTAMP,
+    "reset_token" VARCHAR(255),
+    "reset_token_expiry" TIMESTAMP,
     "last_login" TIMESTAMP,
     "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP NOT NULL,
