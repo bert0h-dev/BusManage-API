@@ -17,35 +17,107 @@ datasource db {
 // =====================================================
 enum UserRole {
   admin
-  user
+  coordinator
+  driver
+  collector
+  vendor
   viewer
+}
+
+enum StaffRole {
+  driver
+  collector
+  mechanic
+  supervisor
+}
+
+enum StaffStatus {
+  active
+  inactive
+  vacation
+  suspended
+}
+
+enum LicenseType {
+  A
+  B
+  C
+  D
+  E
 }
 
 // =====================================================
 // MODELS
 // =====================================================
 
+// Tabla de usuarios del sistema
 model User {
   id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email                   String    @unique @db.VarChar(255)
   passwordHash            String    @map("password_hash") @db.VarChar(255)
-  role                    UserRole  @default(user)
   fullName                String    @map("full_name") @db.VarChar(255)
+  role                    UserRole  @default(viewer)
   isActive                Boolean   @default(true) @map("is_active")
-
+  
+  // Token de acceso
   refreshTokenHash        String?   @map("refresh_token_hash") @db.VarChar(500)
   refreshTokenCreatedAt   DateTime? @map("refresh_token_created_at") @db.Timestamp()
   refreshTokenExpiresAt   DateTime? @map("refresh_token_expires_at") @db.Timestamp()
   
+  // Reinicio de password
   resetToken              String?   @map("reset_token") @db.VarChar(255)
   resetTokenExpiry        DateTime? @map("reset_token_expiry") @db.Timestamp()
-
+  
+  // Auditoria
   lastLogin               DateTime? @map("last_login") @db.Timestamp()
   createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamp()
   updatedAt               DateTime  @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relaciones
+  staff                   Staff?
 
   @@index([email])
   @@index([role])
   @@index([isActive])
   @@map("users")
+}
+
+// Tabla del staff que usaran el sistema
+model Staff {
+  id                      String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                  String?     @unique @map("user_id") @db.Uuid
+  employeeNumber          String      @unique @map("employee_number") @db.VarChar(20)
+  fullName                String      @map("full_name") @db.VarChar(255)
+  email                   String      @db.VarChar(255)
+  role                    StaffRole
+  isActive                Boolean     @default(true) @map("is_active")
+
+  // Información general del staff
+  status                  StaffStatus @default(active)
+  hireDate                DateTime    @map("hire_date") @db.Date
+  birthDate               DateTime    @map("birth_date") @db.Date
+  phone                   String      @db.VarChar(20)
+  address                 String?     @db.Text
+  emergencyContact        String?     @map("emergency_contact") @db.VarChar(255)
+  emergencyPhone          String?     @map("emergency_phone") @db.VarChar(20)
+
+  // Información si es driver
+  licenseNumber           String?      @map("license_number") @db.VarChar(50)
+  licenseType             LicenseType? @map("license_type")
+  licenseExpiry           DateTime?    @map("license_expiry") @db.Date
+
+  // Auditoria
+  createdAt               DateTime     @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt               DateTime     @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relaciones
+  user                    User?  @relation(fields: [userId], references: [id])
+
+  @@index([employeeNumber])
+  @@index([role])
+  @@index([status])
+  @@index([userId])
+  @@index([licenseExpiry])
+  @@index([isActive])
+  @@map("staff")
 }
