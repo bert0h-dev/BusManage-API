@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -18,6 +18,7 @@ import {
   InvalidCurrentPasswordException,
   InvalidTokenException,
   PasswordTooWeakException,
+  UserNotActiveException,
   UserNotFoundException,
 } from '../common/exceptions/auth.exception';
 import { MessageOnlyResponseDto, SuccessResponseDto } from '../common/dtos/response.dto';
@@ -83,22 +84,25 @@ export class AuthService {
   }
 
   /**
-   * Login de usuario
+   * Login
    */
   async login(LoginDto: LoginDto): Promise<SuccessResponseDto> {
-    const { email, password } = LoginDto;
+    const { identifier, password } = LoginDto;
 
-    // Buscar usuario
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        passwordHash: true,
-        fullName: true,
-        role: true,
-        isActive: true,
-        createdAt: true,
+    // Buscar usuario por email o por número de empleado
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: identifier },
+          {
+            staff: {
+              employeeNumber: identifier,
+            },
+          },
+        ],
+      },
+      include: {
+        staff: true,
       },
     });
 
@@ -108,7 +112,7 @@ export class AuthService {
 
     // Verificar si está activo
     if (!user.isActive) {
-      throw new InvalidCredentialsException();
+      throw new UserNotActiveException();
     }
 
     // Verificar contraseña
@@ -126,13 +130,24 @@ export class AuthService {
     // Generar token
     const tokens = await this.generateTokenPair(user.id, user.email, user.role);
 
-    // Remover password del objeto
-    const { passwordHash, ...userWithoutPassowrd } = user;
+    const userReturn = {
+      id: user.id,
+      email: user.email,
+      fullnName: user.fullName,
+      role: user.role,
+      isActive: user.isActive,
+      staff: user.staff
+        ? {
+            employeeNumber: user.staff.employeeNumber,
+            role: user.staff.role,
+          }
+        : null,
+    };
 
     return {
       message: 'Login exitoso',
       data: {
-        user: userWithoutPassowrd,
+        user: userReturn,
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
       },
@@ -148,18 +163,18 @@ export class AuthService {
       select: {
         id: true,
         email: true,
-        fullName: true,
+        passwordHash: true,
         role: true,
         isActive: true,
       },
     });
 
     if (!user) {
-      throw new UnauthorizedException('Usuario no encontrado');
+      throw new UserNotFoundException();
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException('Usuario inactivo');
+      throw new UserNotActiveException();
     }
 
     return user;
@@ -205,21 +220,31 @@ export class AuthService {
   }
 
   /**
-   * Solicitar restablecimiento de contraseña
+   * Solicitar restablecimiento de contraseña del usuario
    */
   async forgotPassowrd(forgotPassowrdDto: ForgotPasswordDto): Promise<MessageOnlyResponseDto> {
-    const { email } = forgotPassowrdDto;
+    const { identifier } = forgotPassowrdDto;
 
     // Buscar usuario
-    const user = await this.prisma.user.findUnique({
-      where: { email },
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: identifier },
+          {
+            staff: {
+              employeeNumber: identifier,
+            },
+          },
+        ],
+      },
+      include: {
+        staff: true,
+      },
     });
 
     // No revelar si el usuario existe o no
     if (!user) {
-      return {
-        message: 'Si el email existe, recibirás instrucciones para restablecer tu contraseña*',
-      };
+      throw new UserNotFoundException();
     }
 
     // Generar token de reset
@@ -239,14 +264,14 @@ export class AuthService {
     // Aqui va el envio email con el link
 
     return {
-      message: 'Si el email existe, recibirás instrucciones para restablecer tu contraseña',
+      message: 'Recibirás a tu email instrucciones para restablecer tu contraseña',
     };
   }
 
   /**
-   * Restablecer contraseña con token
+   * Restablecer contraseña del usuario con token
    */
-  async resetpassword(resetPasswordDto: ResetPasswordDto): Promise<MessageOnlyResponseDto> {
+  async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<MessageOnlyResponseDto> {
     const { token, newPassword } = resetPasswordDto;
 
     // Buscar usuario con el token válido
@@ -260,7 +285,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new BadRequestException('Token inválido o expirado');
+      throw new InvalidTokenException();
     }
 
     // Hash de nueva contraseña
@@ -323,7 +348,7 @@ export class AuthService {
   }
 
   /**
-   * Logout - Revocar refresh token
+   * Logout de usuario - Revocar refresh token
    */
   async logout(userId: string): Promise<MessageOnlyResponseDto> {
     await this.prisma.user.update({

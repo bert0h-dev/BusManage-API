@@ -4,6 +4,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
 
@@ -42,7 +43,7 @@ async function bootstrap() {
   );
 
   // Filtros de excepciones
-  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalFilters(new HttpExceptionFilter(), new PrismaExceptionFilter());
 
   // Interceptors globales
   app.useGlobalInterceptors(new TimeoutInterceptor(configService), new ResponseInterceptor());

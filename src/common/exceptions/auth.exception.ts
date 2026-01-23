@@ -2,7 +2,7 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 
 export class InvalidCredentialsException extends HttpException {
   constructor() {
-    super('Email o contraseña incorrectos', HttpStatus.UNAUTHORIZED);
+    super('Las Credenciales son incorrectos', HttpStatus.UNAUTHORIZED);
   }
 }
 

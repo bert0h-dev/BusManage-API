@@ -29,13 +29,18 @@ export class ResponseInterceptor implements NestInterceptor {
         }
 
         const apiResponse: SuccessResponse = {
+          success: true,
           statusCode,
           message,
           data: responseData,
-          timestamp,
-          path: url,
         };
 
+        if (process.env.NODE_ENV === 'development') {
+          (apiResponse as any).debug = {
+            timestamp,
+            path: url,
+          };
+        }
         return apiResponse;
       }),
     );

@@ -29,7 +29,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     // Define mensajes seguros segun el tipo de error
     const errorMessagesMap: Record<number, string> = {
       [HttpStatus.BAD_REQUEST]: 'Los datos proporcionados son inválidos',
-      [HttpStatus.UNAUTHORIZED]: 'Email o contraseña incorrectos',
+      [HttpStatus.UNAUTHORIZED]: 'Las credenciales son incorrectos',
       [HttpStatus.FORBIDDEN]: 'No tienes permiso para acceder a este recurso',
       [HttpStatus.NOT_FOUND]: 'El recurso que buscas no existe',
       [HttpStatus.CONFLICT]: 'Este recurso ya existe',
@@ -38,22 +38,23 @@ export class HttpExceptionFilter implements ExceptionFilter {
     };
 
     // Si es un error especifico conocido, usa el mensaje seguro
-    if (errorMessage[status]) {
+    if (errorMessagesMap[status]) {
       userMessage = errorMessagesMap[status];
     }
 
     const errorResponse: ErrorResponse = {
+      success: false,
       statusCode: status,
-      message: userMessage,
       error: this.getErrorType(status),
-      path: request.url,
-      method: request.method,
-      timestamp: new Date().toISOString(),
+      message: userMessage,
     };
 
     // En desarrollo, incluye mas detalles
     if (process.env.NODE_ENV === 'development') {
       (errorResponse as any).debug = {
+        path: request.url,
+        method: request.method,
+        timestamp: new Date().toISOString(),
         originalMessage: errorMessage,
         stack: exception.stack,
       };

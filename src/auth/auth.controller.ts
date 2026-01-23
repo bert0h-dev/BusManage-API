@@ -21,7 +21,7 @@ export class AuthController {
    * Rate Limit: 5 intentos cada 10 minutos
    */
   @Throttle({ default: { limit: 5, ttl: 600000 } })
-  @Post('/register')
+  @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Registrar nuevo usuario' })
   @ApiResponse({
@@ -41,11 +41,11 @@ export class AuthController {
   }
 
   /**
-   * POST /auth/login - Iniciar sesión
+   * POST /auth/login - Iniciar sesión de usuario
    * Rate Limit: 3 intentos cada 15 minutos (prevenir fuerza bruta)
    */
   @Throttle({ default: { limit: 3, ttl: 900000 } })
-  @Post('/login')
+  @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Iniciar sesión' })
   @ApiResponse({
@@ -92,7 +92,7 @@ export class AuthController {
   }
 
   /**
-   * POST /auth/forgot-password - Solicitar restablecimiento de contraseña
+   * POST /auth/forgot-password - Solicitar restablecimiento de contraseña de usuario
    * Rate Limit: 3 intentos cada 30 minutos
    */
   @Throttle({ default: { limit: 3, ttl: 1800000 } })
@@ -116,7 +116,7 @@ export class AuthController {
    */
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Restablecer contraseña con token' })
+  @ApiOperation({ summary: 'Restablecer contraseña del usuario con token' })
   @ApiResponse({
     status: 200,
     description: 'Contraseña restablecida exitosamente',
@@ -126,7 +126,7 @@ export class AuthController {
     description: 'Token inválido o expirado',
   })
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
-    return this.authService.resetpassword(resetPasswordDto);
+    return this.authService.resetPassword(resetPasswordDto);
   }
 
   /**
