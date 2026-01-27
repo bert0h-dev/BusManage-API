@@ -15,6 +15,8 @@ datasource db {
 // =====================================================
 // ENUMS
 // =====================================================
+
+// Rol de un usuario
 enum UserRole {
   admin
   coordinator
@@ -23,27 +25,43 @@ enum UserRole {
   vendor
   viewer
 }
-
+// Rol del Staff
 enum StaffRole {
   driver
   collector
   mechanic
   supervisor
 }
-
+// Estatus del Staff
 enum StaffStatus {
   active
   inactive
   vacation
   suspended
 }
-
+// Tipo de licencia
 enum LicenseType {
   A
   B
   C
   D
   E
+}
+// Clasificaciones del menu
+enum MenuType {
+  principal
+  operations
+  config
+}
+// Tipos de acciones que se peuden realizar sobre un modulo
+enum PermissionAction {
+  view      // Ver/Listar
+  create    // Crear
+  update    // Editar
+  delete    // Eliminar
+  export    // Exportar datos
+  print     // Imprimir
+  manage    // Gestión completa (todos los permisos)
 }
 
 // =====================================================
@@ -75,6 +93,7 @@ model User {
 
   // Relaciones
   staff                   Staff?
+  rolePermissions         RolePermission[]
 
   @@index([email])
   @@index([role])
@@ -120,4 +139,85 @@ model Staff {
   @@index([licenseExpiry])
   @@index([isActive])
   @@map("staff")
+}
+
+// Tabla de módulos en el sistema
+model Module {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                    String    @unique @db.VarChar(250)              // Ej: "dashboard", "ticket_sales", "routes"
+  displayName             String    @map("display_name") @db.VarChar(250) // Ej: "Dashboard", "Venta de Boletos", "Rutas"
+  description             String?   @db.Text
+  icon                    String?   @db.VarChar(100)            // Nombre del icono (Opcional)
+  order                   Int       @default(0)                 // Orden de visualizacion en el menu
+  parentId                String?   @map("parent_id") @db.Uuid  // ID del modulo padre (Opcional)
+  menuType                MenuType                              // Tipo de menu Configuracion, Operaciones o Configuración.
+  isActive                Boolean   @default(true) @map("is_active")
+
+  // Auditoria
+  createdAt               DateTime     @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt               DateTime     @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relaciones
+  parent                  Module?      @relation("ModuleHierarchy", fields: [parentId], references: [id])
+  children                Module[]     @relation("ModuleHierarchy")
+  permissions             Permission[]
+  rolePermissions         RolePermission[]
+
+  @@index([name])
+  @@index([parentId])
+  @@index([isActive])
+  @@index([order])
+  @@index([menuType])
+  @@map("modules")
+}
+
+// Tabla de permisos de los modulos
+model Permission {
+  id                      String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  moduleId                String            @map("module_id") @db.Uuid
+  action                  PermissionAction
+  description             String?           @db.Text
+  isActive                Boolean           @default(true) @map("is_active")
+
+  // Auditoria
+  createdAt               DateTime          @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt               DateTime          @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relaciones
+  module                  Module            @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  rolePermissions         RolePermission[]
+
+  @@unique([moduleId, action]) // Un modulo no puede tener la misma acción duplicada
+  @@index([moduleId])
+  @@index([action])
+  @@index([isActive])
+  @@map("permissions")
+}
+
+// Tabla intermedia: Relacion de roles de usuario con permisos
+model RolePermission {
+  id                      String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                  String?           @map("user_id") @db.Uuid          // Si es null, aplica al rol en general
+  userRole                UserRole?         @map("user_role")                 // admin, coordinator, driver, etc.
+  moduleId                String            @map("module_id") @db.Uuid  
+  permissionId            String            @map("permission_id") @db.Uuid
+  granted                 Boolean           @default(true)                    // true = permitido, false = denegado
+
+  // Auditoria
+  createdAt               DateTime          @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt               DateTime          @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relaciones
+  user                    User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module                  Module            @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  permission              Permission        @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, moduleId, permissionId])      // Permiso específico por usuario
+  @@unique([userRole, moduleId, permissionId])    // Permiso por rol
+  @@index([userId])
+  @@index([userRole])
+  @@index([moduleId])
+  @@index([permissionId])
+  @@index([granted])
+  @@map("role_permissions")
 }
