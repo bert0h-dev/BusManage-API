@@ -181,6 +181,34 @@ export class AuthService {
   }
 
   /**
+   * Obtener perfil del usuario autenticado
+   */
+  async getProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        isActive: true,
+        staff: {
+          select: {
+            employeeNumber: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new InvalidCredentialsException();
+    }
+
+    return user;
+  }
+
+  /**
    * Cambiar contraseña (usuario autenticado)
    */
   async changePassowrd(

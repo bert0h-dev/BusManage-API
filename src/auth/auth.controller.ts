@@ -65,6 +65,26 @@ export class AuthController {
   }
 
   /**
+   * GET /auth/me - Obtener informacion del usuario autenticado
+   */
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Obtener información del usuario autenticado' })
+  @ApiResponse({
+    status: 200,
+    description: 'Información del usuario autenticado',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autorizado',
+  })
+  async getProfile(@GetUser('id') userId: string) {
+    return this.authService.getProfile(userId);
+  }
+
+  /**
    * POST /auth/change-password - Cambiar contraseña (usuario autenticado)
    */
   @Post('change-password')
