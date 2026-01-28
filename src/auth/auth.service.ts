@@ -7,7 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
-import { UserRole } from '@prisma/client';
+import { PermissionAction, UserRole } from '@prisma/client';
 import { ChangePassowrdDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -17,11 +17,14 @@ import {
   InvalidCredentialsException,
   InvalidCurrentPasswordException,
   InvalidTokenException,
+  ModuleNotFoundException,
   PasswordTooWeakException,
+  PermissionNotFoundException,
   UserNotActiveException,
   UserNotFoundException,
 } from '../common/exceptions/auth.exception';
 import { MessageOnlyResponseDto, SuccessResponseDto } from '../common/dtos/response.dto';
+import path from 'path';
 
 @Injectable()
 export class AuthService {
@@ -31,57 +34,7 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  /**
-   * Registrar nuevo usuario
-   */
-  async register(registerDto: RegisterDto): Promise<SuccessResponseDto> {
-    const { email, password, fullName, role } = registerDto;
-
-    // Verificar si el email ya existe
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      throw new EmailAlreadyExistsException();
-    }
-
-    this.validatePasswordStrength(password);
-
-    // Hash de la contraseña
-    const hashedPassword = await this.hashPassword(password);
-
-    // Crear usuario
-    const user = await this.prisma.user.create({
-      data: {
-        email,
-        passwordHash: hashedPassword,
-        fullName,
-        role: role || 'viewer',
-        isActive: true,
-      },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        role: true,
-        isActive: true,
-        createdAt: true,
-      },
-    });
-
-    // Generar token
-    const tokens = await this.generateTokenPair(user.id, user.email, user.role);
-
-    return {
-      message: 'Usuario registrado exitosamente',
-      data: {
-        user,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      },
-    };
-  }
+  // ============= MÉTODOS PARA MANEJO DE SESIONES =============
 
   /**
    * Login
@@ -148,6 +101,117 @@ export class AuthService {
       message: 'Login exitoso',
       data: {
         user: userReturn,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      },
+    };
+  }
+
+  /**
+   * Renovar access token usando refresh token
+   */
+  async refreshAccessToken(refreskTokenDto: RefreshTokenDto): Promise<SuccessResponseDto> {
+    const { refreshToken } = refreskTokenDto;
+
+    try {
+      // Verificar que el refresh token sea valido
+      const payload = this.jwtService.verify(refreshToken);
+
+      if (payload.type !== 'refresh') {
+        throw new InvalidTokenException('refresh token');
+      }
+
+      // Buscar usuario
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+      });
+
+      if (!user || !user.isActive) {
+        throw new InvalidTokenException('refresh token');
+      }
+
+      // Verificar que el refresh token coincida con el guardado
+      const isTokenValid = await bcrypt.compare(refreshToken, user.refreshTokenHash || '');
+      if (!isTokenValid) {
+        throw new InvalidTokenException('refresh token');
+      }
+
+      // Genera nuevo par de tokens
+      const tokens = await this.generateTokenPair(user.id, user.email, user.role);
+
+      return {
+        message: 'Tokens renovados exitosamente',
+        data: tokens,
+      };
+    } catch (error) {
+      throw new InvalidTokenException('refresh token');
+    }
+  }
+
+  /**
+   * Logout de usuario - Revocar refresh token
+   */
+  async logout(userId: string): Promise<MessageOnlyResponseDto> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        refreshTokenHash: null,
+        refreshTokenCreatedAt: null,
+        refreshTokenExpiresAt: null,
+      },
+    });
+
+    return { message: 'Sesión cerrada correctamente' };
+  }
+
+  // ============= MÉTODOS PARA MANEJO DE USUARIOS =============
+
+  /**
+   * Registrar nuevo usuario
+   */
+  async register(registerDto: RegisterDto): Promise<SuccessResponseDto> {
+    const { email, password, fullName, role } = registerDto;
+
+    // Verificar si el email ya existe
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      throw new EmailAlreadyExistsException();
+    }
+
+    this.validatePasswordStrength(password);
+
+    // Hash de la contraseña
+    const hashedPassword = await this.hashPassword(password);
+
+    // Crear usuario
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        passwordHash: hashedPassword,
+        fullName,
+        role: role || 'viewer',
+        isActive: true,
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+
+    // Generar token
+    const tokens = await this.generateTokenPair(user.id, user.email, user.role);
+
+    return {
+      message: 'Usuario registrado exitosamente',
+      data: {
+        user,
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
       },
@@ -334,61 +398,362 @@ export class AuthService {
     return { message: 'Contraseña restablecida exitosamente' };
   }
 
-  /**
-   * Renovar access token usando refresh token
-   */
-  async refreshAccessToken(refreskTokenDto: RefreshTokenDto): Promise<SuccessResponseDto> {
-    const { refreshToken } = refreskTokenDto;
-
-    try {
-      // Verificar que el refresh token sea valido
-      const payload = this.jwtService.verify(refreshToken);
-
-      if (payload.type !== 'refresh') {
-        throw new InvalidTokenException('refresh token');
-      }
-
-      // Buscar usuario
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.sub },
-      });
-
-      if (!user || !user.isActive) {
-        throw new InvalidTokenException('refresh token');
-      }
-
-      // Verificar que el refresh token coincida con el guardado
-      const isTokenValid = await bcrypt.compare(refreshToken, user.refreshTokenHash || '');
-      if (!isTokenValid) {
-        throw new InvalidTokenException('refresh token');
-      }
-
-      // Genera nuevo par de tokens
-      const tokens = await this.generateTokenPair(user.id, user.email, user.role);
-
-      return {
-        message: 'Tokens renovados exitosamente',
-        data: tokens,
-      };
-    } catch (error) {
-      throw new InvalidTokenException('refresh token');
-    }
-  }
+  // ============= MÉTODOS PARA PERMISOS =============
 
   /**
-   * Logout de usuario - Revocar refresh token
+   * Verifica si un usuario tiene permiso para realizar una acción en un modulo
    */
-  async logout(userId: string): Promise<MessageOnlyResponseDto> {
-    await this.prisma.user.update({
+  async hasPermission(
+    userId: string,
+    moduleName: string,
+    action: PermissionAction,
+  ): Promise<boolean> {
+    // Obtener el usuario
+    const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      data: {
-        refreshTokenHash: null,
-        refreshTokenCreatedAt: null,
-        refreshTokenExpiresAt: null,
+    });
+
+    if (!user || !user.isActive) return false;
+
+    // Buscar el modulo
+    const module = await this.prisma.module.findUnique({
+      where: { name: moduleName, isActive: true },
+    });
+
+    if (!module) return false;
+
+    // Buscar el permiso especifico
+    const permission = await this.prisma.permission.findUnique({
+      where: {
+        moduleId_action: {
+          moduleId: module.id,
+          action,
+        },
+        isActive: true,
       },
     });
 
-    return { message: 'Sesión cerrada correctamente' };
+    if (!permission) return false;
+
+    // Primero verificar si hay un permiso especifico para el usuario
+    const userPermission = await this.prisma.rolePermission.findUnique({
+      where: {
+        userId_moduleId_permissionId: {
+          userId: userId,
+          moduleId: module.id,
+          permissionId: permission.id,
+        },
+      },
+    });
+
+    // Si existe un permiso especifico del usuario usar ese
+    if (userPermission) return userPermission.granted;
+
+    // Si no, verificar el permiso por rol
+    const rolePermission = await this.prisma.rolePermission.findUnique({
+      where: {
+        userRole_moduleId_permissionId: {
+          userRole: user.role,
+          moduleId: module.id,
+          permissionId: permission.id,
+        },
+      },
+    });
+
+    return rolePermission ? rolePermission.granted : false;
+  }
+
+  /**
+   * Verificar si un usuario puede acceder a un módulo (al menos con permiso 'view')
+   */
+  async canAccessModule(userId: string, moduleName: string): Promise<boolean> {
+    return this.hasPermission(userId, moduleName, PermissionAction.view);
+  }
+
+  /**
+   * Obtener todos los módulos a los que un usuario tiene acceso
+   */
+  async getUserModules(userId: string) {
+    // Se obtiene el usuario
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || !user.isActive) return [];
+
+    // Obtener los permisos
+    const rolePermission = await this.prisma.rolePermission.findMany({
+      where: {
+        userRole: user.role,
+        granted: true,
+        module: {
+          parentId: null,
+          isActive: true,
+        },
+        permission: {
+          action: PermissionAction.view,
+          isActive: true,
+        },
+      },
+      select: {
+        id: true,
+        granted: true,
+        module: {
+          select: {
+            id: true,
+            name: true,
+            displayName: true,
+            icon: true,
+            order: true,
+            menuType: true,
+            path: true,
+          },
+        },
+        permission: {
+          select: {
+            id: true,
+            action: true,
+            description: true,
+          },
+        },
+      },
+      orderBy: {
+        module: {
+          order: 'asc',
+        },
+      },
+    });
+
+    const modulesMap = new Map();
+
+    for (const rp of rolePermission) {
+      // Se guarda el modulo principal
+      modulesMap.set(rp.module.id, {
+        id: rp.module.id,
+        name: rp.module.name,
+        displayName: rp.module.displayName,
+        icon: rp.module.icon,
+        order: rp.module.order,
+        menuType: rp.module.menuType,
+        path: rp.module.path,
+        subModules: [],
+      });
+
+      // Se obtienen los submodulos
+      const subModules = await this.prisma.rolePermission.findMany({
+        where: {
+          userRole: user.role,
+          granted: true,
+          module: {
+            parentId: rp.module.id,
+            isActive: true,
+          },
+          permission: {
+            action: PermissionAction.view,
+            isActive: true,
+          },
+        },
+        select: {
+          id: true,
+          granted: true,
+          module: {
+            select: {
+              id: true,
+              name: true,
+              displayName: true,
+              icon: true,
+              order: true,
+              menuType: true,
+              path: true,
+            },
+          },
+          permission: {
+            select: {
+              id: true,
+              action: true,
+              description: true,
+            },
+          },
+        },
+        orderBy: {
+          module: {
+            order: 'asc',
+          },
+        },
+      });
+
+      // Se recorren los submodulos para agregarlos al modulo
+      if (subModules) {
+        for (const smrp of subModules) {
+          const subModule = modulesMap.get(rp.module.id);
+          if (subModule) {
+            subModule.subModules.push({
+              id: smrp.module.id,
+              name: smrp.module.name,
+              displayName: smrp.module.displayName,
+              order: smrp.module.order,
+              menuType: smrp.module.menuType,
+              path: smrp.module.path,
+            });
+          }
+        }
+      }
+    }
+
+    return Array.from(modulesMap.values()).sort((a, b) => a.order - b.order);
+  }
+
+  /**
+   * Obtener todos los permisos de un usuario para un módulo especifico
+   */
+  async getUserModulePermissions(userId: string, moduleName: string): Promise<PermissionAction[]> {
+    // Se obtiene el usuario
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || !user.isActive) return [];
+
+    const module = await this.prisma.module.findUnique({
+      where: { name: moduleName, isActive: true },
+    });
+
+    if (!module) return [];
+
+    // Obtener permisos del rol
+    const rolePermissions = await this.prisma.rolePermission.findMany({
+      where: {
+        userRole: user.role,
+        moduleId: module.id,
+        granted: true,
+      },
+      include: {
+        permission: true,
+      },
+    });
+
+    // Obtener permisos personalizados del usuario
+    const userPermissions = await this.prisma.rolePermission.findMany({
+      where: {
+        userId: userId,
+        moduleId: module.id,
+        granted: true,
+      },
+      include: {
+        permission: true,
+      },
+    });
+
+    // Combinar permisos (los del usuario tienen prioridad)
+    const permissionsSet = new Set<PermissionAction>();
+
+    rolePermissions.forEach((rp) => {
+      if (rp.permission.isActive) {
+        permissionsSet.add(rp.permission.action);
+      }
+    });
+
+    userPermissions.forEach((up) => {
+      if (up.permission.isActive) {
+        permissionsSet.add(up.permission.action);
+      }
+    });
+
+    return Array.from(permissionsSet);
+  }
+
+  /**
+   * Asigna un permiso personalizado a un usuario
+   */
+  async assignUserPermission(
+    userId: string,
+    moduleName: string,
+    action: PermissionAction,
+    granted: boolean = true,
+  ): Promise<MessageOnlyResponseDto> {
+    const module = await this.prisma.module.findUnique({
+      where: { name: moduleName },
+    });
+
+    if (!module) {
+      throw new ModuleNotFoundException(moduleName);
+    }
+
+    const permission = await this.prisma.permission.findUnique({
+      where: {
+        moduleId_action: {
+          moduleId: module.id,
+          action,
+        },
+      },
+    });
+
+    if (!permission) {
+      throw new PermissionNotFoundException(moduleName, action);
+    }
+
+    const assingPermission = await this.prisma.rolePermission.upsert({
+      where: {
+        userId_moduleId_permissionId: {
+          userId: userId,
+          moduleId: module.id,
+          permissionId: permission.id,
+        },
+      },
+      update: {
+        granted: granted,
+      },
+      create: {
+        userId: userId,
+        moduleId: module.id,
+        permissionId: permission.id,
+        granted: granted,
+      },
+    });
+
+    return { message: 'Permiso asignado correctamente' };
+  }
+
+  /**
+   * Elimina un permiso personalizado de un usuario
+   */
+  async removeUserPermission(
+    userId: string,
+    moduleName: string,
+    action: PermissionAction,
+  ): Promise<MessageOnlyResponseDto> {
+    const module = await this.prisma.module.findUnique({
+      where: { name: moduleName },
+    });
+
+    if (!module) {
+      throw new ModuleNotFoundException(moduleName);
+    }
+
+    const permission = await this.prisma.permission.findUnique({
+      where: {
+        moduleId_action: {
+          moduleId: module.id,
+          action,
+        },
+      },
+    });
+
+    if (!permission) {
+      throw new PermissionNotFoundException(moduleName, action);
+    }
+
+    const removeUserPermission = await this.prisma.rolePermission.delete({
+      where: {
+        userId_moduleId_permissionId: {
+          userId: userId,
+          moduleId: module.id,
+          permissionId: permission.id,
+        },
+      },
+    });
+
+    return { message: 'Permiso eliminado correctamente' };
   }
 
   // ============= MÉTODOS PRIVADOS =============

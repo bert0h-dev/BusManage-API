@@ -42,3 +42,21 @@ export class InvalidCurrentPasswordException extends HttpException {
     super('La contraseña actual es incorrecta', HttpStatus.BAD_REQUEST);
   }
 }
+
+export class InvalidPermissionException extends HttpException {
+  constructor() {
+    super('No tienes permiso para realizar esta acción', HttpStatus.FORBIDDEN);
+  }
+}
+
+export class ModuleNotFoundException extends HttpException {
+  constructor(moduleName: string = 'seleccionado') {
+    super(`Módulo ${moduleName} no encontrado`, HttpStatus.NOT_FOUND);
+  }
+}
+
+export class PermissionNotFoundException extends HttpException {
+  constructor(moduleName: string, action: string) {
+    super(`Permiso ${moduleName} no encontrado para el módulo ${moduleName}`, HttpStatus.NOT_FOUND);
+  }
+}

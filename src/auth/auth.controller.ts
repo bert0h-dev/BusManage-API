@@ -16,29 +16,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  /**
-   * POST /auth/register - Registrar nuevo usuario
-   * Rate Limit: 5 intentos cada 10 minutos
-   */
-  @Throttle({ default: { limit: 5, ttl: 600000 } })
-  @Post('register')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Registrar nuevo usuario' })
-  @ApiResponse({
-    status: 201,
-    description: 'Usuario regístrado exitosamente',
-  })
-  @ApiResponse({
-    status: 409,
-    description: 'El email ya está registrado',
-  })
-  @ApiResponse({
-    status: 429,
-    description: 'Demasiados intentos de registro. Intenta más tarde.',
-  })
-  async register(@Body() registerDto: RegisterDto) {
-    return this.authService.register(registerDto);
-  }
+  // ============= MANEJO DE SESIONES =============
 
   /**
    * POST /auth/login - Iniciar sesión de usuario
@@ -65,6 +43,88 @@ export class AuthController {
   }
 
   /**
+   * POST /auth/refresh - Renovar access token con refresh token
+   * Rate Limit: 10 intentos cada 60 segundos
+   */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Renovar access token usando refresh token',
+    description: 'Requiere un refresh token válido. Retorna un nuevo par de tokens.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tokens renovados exitosamente',
+    schema: {
+      example: {
+        accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Refresh token inválido o expirado',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Demasiadas solicitudes. Intenta más tarde.',
+  })
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.refreshAccessToken(refreshTokenDto);
+  }
+
+  /**
+   * POST /auth/logout - Cerrar sesión
+   */
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Cerrar sesión',
+    description: 'Revoca el refresh token del usuario autenticado',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sesión cerrada exitosamente',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autorizado',
+  })
+  async logout(@GetUser('id') userId: string) {
+    return this.authService.logout(userId);
+  }
+
+  // ============= MANEJO DE USUARIOS =============
+
+  /**
+   * POST /auth/register - Registrar nuevo usuario
+   * Rate Limit: 5 intentos cada 10 minutos
+   */
+  @Throttle({ default: { limit: 5, ttl: 600000 } })
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Registrar nuevo usuario' })
+  @ApiResponse({
+    status: 201,
+    description: 'Usuario regístrado exitosamente',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'El email ya está registrado',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Demasiados intentos de registro. Intenta más tarde.',
+  })
+  async register(@Body() registerDto: RegisterDto) {
+    return this.authService.register(registerDto);
+  }
+
+  /**
    * GET /auth/me - Obtener informacion del usuario autenticado
    */
   @Get('me')
@@ -82,6 +142,26 @@ export class AuthController {
   })
   async getProfile(@GetUser('id') userId: string) {
     return this.authService.getProfile(userId);
+  }
+
+  /**
+   * GET /auth/me/modules - Obtener los modulos del usuario autenticado
+   */
+  @Get('me/modules')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Obtener los modulos del usuario autenticado' })
+  @ApiResponse({
+    status: 200,
+    description: 'Modulos del usuario autenticado',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autorizado',
+  })
+  async getUserModules(@GetUser('id') userId: string) {
+    return this.authService.getUserModules(userId);
   }
 
   /**
@@ -147,61 +227,5 @@ export class AuthController {
   })
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
-  }
-
-  /**
-   * POST /auth/refresh - Renovar access token con refresh token
-   * Rate Limit: 10 intentos cada 60 segundos
-   */
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
-  @Post('refresh')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Renovar access token usando refresh token',
-    description: 'Requiere un refresh token válido. Retorna un nuevo par de tokens.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Tokens renovados exitosamente',
-    schema: {
-      example: {
-        accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-        refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-      },
-    },
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Refresh token inválido o expirado',
-  })
-  @ApiResponse({
-    status: 429,
-    description: 'Demasiadas solicitudes. Intenta más tarde.',
-  })
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
-    return this.authService.refreshAccessToken(refreshTokenDto);
-  }
-
-  /**
-   * POST /auth/logout - Cerrar sesión
-   */
-  @Post('logout')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Cerrar sesión',
-    description: 'Revoca el refresh token del usuario autenticado',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Sesión cerrada exitosamente',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'No autorizado',
-  })
-  async logout(@GetUser('id') userId: string) {
-    return this.authService.logout(userId);
   }
 }
