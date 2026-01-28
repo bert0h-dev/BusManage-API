@@ -71,6 +71,7 @@ CREATE TABLE "modules" (
     "order" INTEGER NOT NULL DEFAULT 0,
     "parent_id" UUID,
     "menuType" "MenuType" NOT NULL,
+    "path" VARCHAR(250) NOT NULL,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP NOT NULL,

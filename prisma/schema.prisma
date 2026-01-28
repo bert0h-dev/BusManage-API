@@ -151,6 +151,7 @@ model Module {
   order                   Int       @default(0)                 // Orden de visualizacion en el menu
   parentId                String?   @map("parent_id") @db.Uuid  // ID del modulo padre (Opcional)
   menuType                MenuType                              // Tipo de menu Configuracion, Operaciones o Configuración.
+  path                    String    @db.VarChar(250)            // Ruta de acceso al modulo (Opcional)
   isActive                Boolean   @default(true) @map("is_active")
 
   // Auditoria
